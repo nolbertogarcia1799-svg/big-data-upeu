@@ -1,0 +1,5 @@
+modelo,auc_cv_media,auc_cv_sd,auc_prueba,delta_auc_prueba_menos_cv,accuracy_prueba,sensibilidad_maligno,especificidad_benigno,precision_maligno,f1_maligno,tiempo_s
+LightGBM,0.99207,0.00468,0.99581,0.00373,0.95804,0.88679,1.0,1.0,0.94,0.57
+Elastic Net,0.991,0.01099,0.99748,0.00649,0.96503,0.92453,0.98889,0.98,0.95146,0.6
+XGBoost,0.99088,0.00534,0.99518,0.00429,0.96503,0.90566,1.0,1.0,0.9505,0.69
+Random Forest,0.98718,0.01044,0.99602,0.00884,0.96503,0.90566,1.0,1.0,0.9505,2.44

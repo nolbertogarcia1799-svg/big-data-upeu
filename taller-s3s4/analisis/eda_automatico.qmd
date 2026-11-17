@@ -1,0 +1,239 @@
+---
+title: "EDA automático"
+subtitle: "Informe exploratorio generado a partir de parámetros"
+author: "Nombre y apellidos del estudiante"
+date: today
+date-format: "DD/MM/YYYY"
+lang: es
+params:
+  archivo: "data/processed/wdbc_limpio.csv"
+  respuesta: "diagnosis"
+  excluir: "id"
+format:
+  html:
+    toc: true
+    toc-title: "Contenido"
+    embed-resources: true
+    code-fold: true
+    theme: cosmo
+execute:
+  warning: false
+  message: false
+knitr:
+  opts_chunk:
+    fig.width: 9
+    fig.height: 5.5
+---
+
+::: {.callout-note title="Cómo usar este informe"}
+Este documento no se edita: se **parametriza**. Cambias el archivo y la variable respuesta, y se genera un EDA completo de cualquier dataset en formato CSV. En la **consola** de RStudio, con el proyecto abierto:
+
+```r
+quarto::quarto_render("analisis/eda_automatico.qmd",
+  execute_params = list(archivo = "data/processed/mi_dataset.csv",
+                        respuesta = "mi_variable", excluir = "id"))
+```
+
+El resultado es `analisis/eda_automatico.html`. Es un punto de partida, no un sustituto del EDA orientado a hipótesis: las **alertas** del final indican qué revisar y qué decisiones anotar en el registro.
+:::
+
+```{r}
+#| label: preparar
+library(tidyverse)
+library(here)
+library(corrplot)
+
+datos <- read_csv(here(params$archivo), show_col_types = FALSE)
+excluir <- trimws(strsplit(params$excluir, ",")[[1]])
+datos <- select(datos, -any_of(excluir))
+y <- params$respuesta
+stopifnot("La variable respuesta no existe en el archivo" = y %in% names(datos))
+
+num <- datos |> select(where(is.numeric), -any_of(y)) |> names()
+cat_ <- datos |> select(where(~ is.character(.x) || is.factor(.x) || is.logical(.x)), -any_of(y)) |> names()
+resp_categorica <- !is.numeric(datos[[y]]) || n_distinct(datos[[y]]) <= 10
+if (resp_categorica) datos[[y]] <- factor(datos[[y]])
+num_var <- num[sapply(num, function(v) isTRUE(sd(datos[[v]], na.rm = TRUE) > 0))]  # sin constantes
+asimetria <- function(x) { x <- x[!is.na(x)]; mean((x - mean(x))^3) / sd(x)^3 }
+```
+
+## 1. Estructura
+
+```{r}
+#| label: estructura
+tibble(Elemento = c("Archivo", "Casos (filas)", "Variables analizadas", "Numéricas", "Categóricas",
+                    "Variable respuesta", "Tipo de respuesta"),
+       Valor = c(params$archivo, nrow(datos), ncol(datos) - 1, length(num), length(cat_), y,
+                 ifelse(resp_categorica, "Categórica (clasificación)", "Numérica (regresión)"))) |>
+  knitr::kable()
+```
+
+## 2. Calidad de los datos
+
+```{r}
+#| label: calidad
+faltantes <- datos |>
+  summarise(across(everything(), ~ mean(is.na(.x)))) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "prop_faltante") |>
+  arrange(desc(prop_faltante))
+cat("Filas duplicadas:", sum(duplicated(datos)), "\n")
+cat("Variables con faltantes:", sum(faltantes$prop_faltante > 0), "\n")
+faltantes |> filter(prop_faltante > 0) |>
+  mutate(prop_faltante = scales::percent(prop_faltante, 0.1)) |> knitr::kable()
+```
+
+## 3. Variable respuesta
+
+```{r}
+#| label: respuesta
+if (resp_categorica) {
+  count(datos, .data[[y]]) |> mutate(proporcion = round(n / sum(n), 3)) |> knitr::kable()
+  ggplot(datos, aes(x = .data[[y]])) + geom_bar(fill = "#003865") +
+    labs(x = y, y = "Casos") + theme_minimal(base_size = 13)
+} else {
+  ggplot(datos, aes(x = .data[[y]])) + geom_histogram(bins = 30, fill = "#003865") +
+    labs(x = y, y = "Casos") + theme_minimal(base_size = 13)
+}
+```
+
+## 4. Variables numéricas
+
+```{r}
+#| label: resumen-numericas
+resumen <- datos |>
+  select(all_of(num)) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "valor") |>
+  group_by(variable) |>
+  summarise(media = mean(valor, na.rm = TRUE), mediana = median(valor, na.rm = TRUE),
+            desv = sd(valor, na.rm = TRUE), min = min(valor, na.rm = TRUE),
+            max = max(valor, na.rm = TRUE), asimetria = asimetria(valor), .groups = "drop") |>
+  mutate(across(where(is.numeric), ~ round(.x, 3)))
+knitr::kable(resumen)
+```
+
+```{r}
+#| label: histogramas
+#| fig-height: 8
+vars_hist <- head(num_var, 20)        # como máximo 20 variables para que el gráfico sea legible
+datos |>
+  select(all_of(vars_hist), any_of(if (resp_categorica) y)) |>
+  pivot_longer(all_of(vars_hist), names_to = "variable", values_to = "valor") |>
+  ggplot(aes(x = valor, fill = if (resp_categorica) .data[[y]] else NULL)) +
+  geom_histogram(bins = 30, alpha = 0.6, position = "identity") +
+  facet_wrap(~ variable, scales = "free", ncol = 4) +
+  labs(x = NULL, y = "Frecuencia", fill = y) + theme_minimal(base_size = 10)
+```
+
+## 5. Relación con la variable respuesta
+
+Para respuesta categórica con dos grupos se reporta la prueba de Wilcoxon y la d de Cohen; con más de dos grupos, la prueba de Kruskal-Wallis y el tamaño del efecto eta² basado en rangos. Para respuesta numérica, la correlación de Spearman.
+
+```{r}
+#| label: efectos
+efecto_var <- function(v) {
+  x <- datos[[v]]; g <- datos[[y]]; ok <- !is.na(x) & !is.na(g); x <- x[ok]; g <- g[ok]
+  if (!resp_categorica) {
+    ct <- suppressWarnings(cor.test(x, g, method = "spearman"))
+    return(tibble(variable = v, prueba = "Spearman", p = ct$p.value, efecto = unname(ct$estimate)))
+  }
+  if (nlevels(droplevels(g)) == 2) {
+    lv <- levels(droplevels(g)); a <- x[g == lv[2]]; b <- x[g == lv[1]]
+    sp <- sqrt(((length(a) - 1) * var(a) + (length(b) - 1) * var(b)) / (length(a) + length(b) - 2))
+    tibble(variable = v, prueba = "Wilcoxon", p = wilcox.test(a, b)$p.value, efecto = (mean(a) - mean(b)) / sp)
+  } else {
+    kt <- kruskal.test(x, g); k <- nlevels(droplevels(g)); n <- length(x)
+    tibble(variable = v, prueba = "Kruskal-Wallis", p = kt$p.value,
+           efecto = max(0, (unname(kt$statistic) - k + 1) / (n - k)))
+  }
+}
+efectos <- map_dfr(num_var, efecto_var) |> arrange(desc(abs(efecto)))
+efectos |> mutate(p = format.pval(p, digits = 2, eps = 0.001), efecto = round(efecto, 3)) |>
+  head(15) |> knitr::kable(caption = "Las 15 variables con mayor tamaño del efecto")
+```
+
+```{r}
+#| label: grafico-efectos
+#| fig-height: 6
+ggplot(head(efectos, 20), aes(x = reorder(variable, abs(efecto)), y = efecto)) +
+  geom_col(fill = "#003865") + coord_flip() +
+  labs(x = NULL, y = "Tamaño del efecto") + theme_minimal(base_size = 11)
+```
+
+## 6. Correlaciones entre predictoras
+
+```{r}
+#| label: correlaciones
+#| fig-height: 7
+if (length(num_var) >= 2) {
+  m <- cor(select(datos, all_of(num_var)), use = "pairwise.complete.obs")
+  m[is.na(m)] <- 0
+  corrplot(m, method = "color", type = "upper", order = "hclust", tl.col = "black",
+           tl.cex = ifelse(length(num_var) > 15, 0.6, 0.9))
+}
+```
+
+## 7. Variables categóricas
+
+```{r}
+#| label: categoricas
+#| results: asis
+if (length(cat_) == 0) cat("El dataset no tiene variables categóricas predictoras.\n")
+for (v in cat_) {
+  cat("\n**", v, "**\n\n", sep = "")
+  print(knitr::kable(count(datos, .data[[v]], sort = TRUE) |> mutate(proporcion = round(n / sum(n), 3)) |> head(15)))
+  cat("\n")
+}
+```
+
+## 8. Alertas automáticas
+
+Estas alertas no son errores: son decisiones que debes tomar y anotar en tu **registro de decisiones**.
+
+```{r}
+#| label: alertas
+alertas <- list()
+for (i in seq_len(nrow(faltantes))) if (faltantes$prop_faltante[i] > 0.05)
+  alertas[[length(alertas) + 1]] <- c("Faltantes", faltantes$variable[i],
+    paste0(scales::percent(faltantes$prop_faltante[i], 0.1), " de valores faltantes: decidir imputación o exclusión."))
+for (i in seq_len(nrow(resumen))) if (!is.na(resumen$asimetria[i]) && abs(resumen$asimetria[i]) > 1)
+  alertas[[length(alertas) + 1]] <- c("Asimetría", resumen$variable[i],
+    paste0("asimetría ", resumen$asimetria[i], ": considerar logaritmo o Yeo-Johnson."))
+for (i in seq_len(nrow(resumen))) if (!is.na(resumen$desv[i]) && resumen$desv[i] == 0)
+  alertas[[length(alertas) + 1]] <- c("Constante", resumen$variable[i], "no varía: no aporta información.")
+if (length(num_var) >= 2) {
+  m <- cor(select(datos, all_of(num_var)), use = "pairwise.complete.obs"); m[lower.tri(m, diag = TRUE)] <- NA
+  pares <- which(abs(m) > 0.9, arr.ind = TRUE)
+  for (k in seq_len(nrow(pares))) alertas[[length(alertas) + 1]] <- c("Redundancia",
+    paste(rownames(m)[pares[k, 1]], "y", colnames(m)[pares[k, 2]]),
+    paste0("correlación ", round(m[pares[k, 1], pares[k, 2]], 2), ": considerar filtro de correlación o PCA."))
+}
+if (resp_categorica) {
+  pmin_ <- min(prop.table(table(datos[[y]])))
+  if (pmin_ < 0.3) alertas[[length(alertas) + 1]] <- c("Desbalance", y,
+    paste0("la clase minoritaria es el ", scales::percent(pmin_, 0.1), ": usar partición estratificada y métricas por clase."))
+}
+if (sum(duplicated(datos)) > 0) alertas[[length(alertas) + 1]] <- c("Duplicados", "filas",
+  paste(sum(duplicated(datos)), "filas duplicadas: verificar si son errores de registro."))
+if (length(alertas) == 0) {
+  cat("No se detectaron alertas.")
+} else {
+  tabla_alertas <- as_tibble(do.call(rbind, alertas), .name_repair = ~ c("Tipo", "Variable", "Qué revisar"))
+  knitr::kable(tabla_alertas)
+}
+```
+
+::: {.callout-tip collapse="true" title="Prompt listo para copiar: pedir a la IA una propuesta de tratamiento"}
+Copia la tabla de alertas (solo la tabla: son estadísticos agregados, no datos de personas) y pégala después de este texto:
+
+```text
+Soy investigador de posgrado. Este es el resumen de alertas del
+análisis exploratorio de mi dataset. Para cada alerta, propón un
+tratamiento justificado, una alternativa y el efecto esperado, en
+formato de tabla: Decisión | Justificación | Alternativa | Efecto.
+No inventes información que no esté en la tabla.
+
+[pega aquí la tabla de alertas]
+```
+
+Antes de copiar la propuesta a tu registro de decisiones, verifica cada fila con tus datos y con lo visto en clase.
+:::

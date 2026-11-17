@@ -1,0 +1,1587 @@
+---
+title: "Parte 1 · Preparar las variables"
+subtitle: "Ciencia de Datos e IA Aplicada · Sesiones 3 y 4 · Laboratorio A"
+author: "Lina Argote  Lazón"
+date: today
+date-format: "DD/MM/YYYY"
+lang: es
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    toc-title: "Contenido"
+    embed-resources: true
+    code-tools: true
+    theme: cosmo
+execute:
+  warning: false
+  message: false
+knitr:
+  opts_chunk:
+    fig.width: 9
+    fig.height: 5.5
+---
+
+**Docente:** Doris Elena Campo Duarte · Escuela de Posgrado, Universidad Peruana Unión
+
+## Para qué es este laboratorio
+
+Antes de entrenar un modelo hay que saber qué dicen los datos sobre tus hipótesis y dejar las variables en una forma que un modelo pueda aprovechar. Aquí recorres ese camino con un caso común: las 569 biopsias del *Breast Cancer Wisconsin (Diagnostic)*, con 30 variables morfológicas y diagnóstico benigno o maligno. Los datos que prepares aquí son el punto de partida de la parte 2 (modelos de ensamble, en Python).
+
+**Dónde trabajas:** en **RStudio**, dentro de tu proyecto (`.Rproj`), con este documento **Quarto** (`analisis/S3S4_parte1.qmd`). Al final lo **renderizas** a HTML y lo **subes a GitHub** con GitHub Desktop.
+
+> Fuente de los datos: Wolberg, W., Mangasarian, O., Street, N., & Street, W. (1993). *Breast Cancer Wisconsin (Diagnostic)* [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5DW2B
+>
+> Lectura complementaria: Lantz (2019), *Machine learning with R* (3.ª ed.), cap. 2 (exploración de datos, pp. 44–64) y cap. 3 (pp. 76–88), que analiza este mismo dataset con k-NN.
+
+## Ruta (18 minutos)
+
+| Paso | Qué haces | Para qué | Tiempo |
+|---|---|---|---|
+| A0 | Proyecto y datos | Tener el proyecto funcionando en RStudio y el dataset cargado y verificado. | 3 min |
+| A1 | EDA orientado a hipótesis (repaso) | Pasar de mirar los datos a reunir evidencia a favor o en contra de cada hipótesis. | 4 min |
+| A2 | Ingeniería de características | Dejar las variables listas para un modelo sin contaminar la evaluación. | 6 min |
+| A3 | Selección de variables | Saber qué variables aportan información real. | 2 min |
+| A4 | Reducción de dimensionalidad | Resumir muchas variables correlacionadas y ver la estructura de los datos. | 2 min |
+| A5 | Guardar, renderizar y subir | Dejar los datos procesados y el informe en tu repositorio de GitHub. | 1 min |
+
+## Cómo trabajar con este documento
+
+- Ábrelo **desde el proyecto** (doble clic en el archivo `.Rproj`), para que las rutas funcionen.
+- Ejecuta los bloques **en orden** con el botón ▶ de cada bloque (*Run Current Chunk*) o con `Ctrl + Shift + Enter`.
+- Antes de cada bloque se explica **para qué** sirve y **por qué** se hace así; después, **qué deberías ver**. Cada bloque tiene el mismo número que su diapositiva.
+- Escribe tus interpretaciones en las secciones **✍️**, directamente en el documento.
+- Debajo de cada bloque hay un recuadro desplegable **«Prompts listos para copiar»**: ya incluye el código de ese bloque, así que solo copias el recuadro completo y lo pegas en el chat de IA que uses (Gemini, ChatGPT, Copilot u otro).
+- Al final, **Render** (`Ctrl + Shift + K`) genera el informe HTML desde cero: si renderiza, tu análisis es reproducible.
+
+## IA responsable en este laboratorio
+
+La IA responsable no se limita a usar bien un asistente: abarca los datos, el modelo, la interpretación y las herramientas.
+
+| Dimensión | Qué hacemos en este laboratorio |
+|---|---|
+| **Datos** | Usamos un dataset público y anonimizado (el `id` no identifica a ninguna persona). Con tu dataset: trabaja con la versión anonimizada y no subas datos personales a la nube ni a repositorios públicos. |
+| **Proceso** | Separamos entrenamiento y prueba antes de transformar, documentamos cada decisión y dejamos todo reproducible en GitHub. |
+| **Modelo e interpretación** | Reportamos la variabilidad, no solo el mejor número; revisamos qué errores comete el modelo y no sobreinterpretamos gráficos exploratorios. |
+| **Asistentes de IA** | La IA sugiere; tú ejecutas, verificas y declaras. Pega código y salidas, nunca datos personales. |
+
+| Para qué | Prompt |
+|---|---|
+| Entender el código | «Explícame línea por línea qué hace este código y por qué se usa aquí: [pega el código]» |
+| Resolver un error | «Al ejecutar este código obtengo este error: [pega el error]. Explícame la causa y cómo corregirlo sin cambiar el propósito.» |
+| Interpretar un resultado | «Obtuve esta salida: [pega la salida]. ¿Cómo la interpreto respecto de mi hipótesis? No uses datos que no estén en la salida.» |
+| Adaptarlo a tu dataset | «Mi dataset tiene estas variables: [pega la estructura]. Adapta este código a mis variables y justifica cada paso.» |
+
+# Paso A0 · Proyecto y datos
+
+| | |
+|---|---|
+| **Para qué** | Tener el proyecto funcionando en RStudio y el dataset cargado y verificado. |
+| **Prompt sugerido para la IA** | «¿Para qué sirve here() en un proyecto de RStudio y qué pasa si abro el documento sin abrir el proyecto?» |
+| **Tiempo sugerido** | 3 min |
+
+## A0.0 · Instalar los paquetes (una sola vez, en la consola)
+
+**Para qué:** tener los paquetes en tu computadora. **Por qué así:** este bloque tiene `eval: false`, así que no se ejecuta al renderizar; copia la línea en la **consola** y ejecútala una sola vez.
+
+```{r}
+#| label: a0-0-instalar
+#| eval: false
+install.packages(c("tidyverse", "here", "recipes", "Boruta",
+                   "FactoMineR", "factoextra", "corrplot", "uwot",
+                   "quarto"))   # quarto: para el EDA automático
+```
+
+## A0.1 · Cargar los paquetes
+
+**Para qué:** Cargar las herramientas del análisis y fijar la semilla.
+
+**Por qué así:** Los paquetes se instalan una sola vez en la consola (no dentro del informe, para que el render no dependa de internet). here() confirma que trabajas dentro del proyecto.
+
+**Qué haces, paso a paso:**
+
+1. Abre el proyecto con doble clic en el archivo .Rproj.
+2. Abre analisis/S3S4_parte1.qmd.
+3. Ejecuta el bloque A0.1 con Run (Ctrl + Shift + Enter).
+4. Comprueba que here() muestre la carpeta del proyecto.
+
+```{r}
+#| label: a0-1
+library(tidyverse)     # datos y gráficos
+library(here)          # rutas desde la carpeta del proyecto
+library(recipes)       # ingeniería de características
+library(Boruta)        # selección de variables
+library(FactoMineR); library(factoextra)   # PCA
+library(corrplot)      # correlaciones
+library(uwot)          # UMAP
+
+set.seed(2026)         # mismos resultados para todos
+here()                 # debe mostrar la carpeta de tu proyecto
+
+verificar <- function(condicion, mensaje) {   # para los controles
+  cat(if (isTRUE(condicion)) "✓" else "✗", mensaje, "
+")
+}
+```
+
+**Qué deberías ver:** La ruta de la carpeta de tu proyecto. Si muestra otra carpeta, abre el proyecto con doble clic en el .Rproj.
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A0.1"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «Cargar los paquetes».
+
+library(tidyverse)     # datos y gráficos
+library(here)          # rutas desde la carpeta del proyecto
+library(recipes)       # ingeniería de características
+library(Boruta)        # selección de variables
+library(FactoMineR); library(factoextra)   # PCA
+library(corrplot)      # correlaciones
+library(uwot)          # UMAP
+
+set.seed(2026)         # mismos resultados para todos
+here()                 # debe mostrar la carpeta de tu proyecto
+
+verificar <- function(condicion, mensaje) {   # para los controles
+  cat(if (isTRUE(condicion)) "✓" else "✗", mensaje, "
+")
+}
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+library(tidyverse)     # datos y gráficos
+library(here)          # rutas desde la carpeta del proyecto
+library(recipes)       # ingeniería de características
+library(Boruta)        # selección de variables
+library(FactoMineR); library(factoextra)   # PCA
+library(corrplot)      # correlaciones
+library(uwot)          # UMAP
+
+set.seed(2026)         # mismos resultados para todos
+here()                 # debe mostrar la carpeta de tu proyecto
+
+verificar <- function(condicion, mensaje) {   # para los controles
+  cat(if (isTRUE(condicion)) "✓" else "✗", mensaje, "
+")
+}
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## A0.2 · Descargar, cargar y verificar los datos
+
+**Para qué:** Guardar el archivo original en data/raw/, leerlo con nombres claros y revisar su calidad.
+
+**Por qué así:** El dato crudo se conserva sin modificar y se descarga solo la primera vez (trazabilidad). El diagnóstico pasa a ser una categoría.
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A0.2 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+4. Ejecuta la verificación del paso A0.
+
+```{r}
+#| label: a0-2
+uci <- "https://archive.ics.uci.edu/ml/machine-learning-databases"
+url <- paste0(uci, "/breast-cancer-wisconsin/wdbc.data")
+ruta_raw <- here("data", "raw", "wdbc.data")
+if (!file.exists(ruta_raw)) {             # descarga solo la 1.ª vez
+  dir.create(dirname(ruta_raw), recursive = TRUE,
+             showWarnings = FALSE)
+  download.file(url, ruta_raw, mode = "wb", quiet = TRUE)
+}
+medidas <- c("radius", "texture", "perimeter", "area",
+             "smoothness", "compactness", "concavity",
+             "concave_points", "symmetry", "fractal_dimension")
+nombres <- c("id", "diagnosis", paste0(medidas, "_mean"),
+             paste0(medidas, "_se"), paste0(medidas, "_worst"))
+
+wdbc <- read_csv(ruta_raw, col_names = nombres,
+                 show_col_types = FALSE) |>
+  mutate(diagnosis = factor(diagnosis, levels = c("B", "M"),
+                            labels = c("Benigno", "Maligno")))
+dim(wdbc)
+count(wdbc, diagnosis) |> mutate(prop = round(n / sum(n), 3))
+c(faltantes = sum(is.na(wdbc)), duplicados = sum(duplicated(wdbc)))
+```
+
+**Qué deberías ver:** 569 y 32; 357 benignos (0,627) y 212 malignos (0,373); 0 faltantes y 0 duplicados.
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A0.2"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «Descargar, cargar y verificar los
+datos».
+
+uci <- "https://archive.ics.uci.edu/ml/machine-learning-databases"
+url <- paste0(uci, "/breast-cancer-wisconsin/wdbc.data")
+ruta_raw <- here("data", "raw", "wdbc.data")
+if (!file.exists(ruta_raw)) {             # descarga solo la 1.ª vez
+  dir.create(dirname(ruta_raw), recursive = TRUE,
+             showWarnings = FALSE)
+  download.file(url, ruta_raw, mode = "wb", quiet = TRUE)
+}
+medidas <- c("radius", "texture", "perimeter", "area",
+             "smoothness", "compactness", "concavity",
+             "concave_points", "symmetry", "fractal_dimension")
+nombres <- c("id", "diagnosis", paste0(medidas, "_mean"),
+             paste0(medidas, "_se"), paste0(medidas, "_worst"))
+
+wdbc <- read_csv(ruta_raw, col_names = nombres,
+                 show_col_types = FALSE) |>
+  mutate(diagnosis = factor(diagnosis, levels = c("B", "M"),
+                            labels = c("Benigno", "Maligno")))
+dim(wdbc)
+count(wdbc, diagnosis) |> mutate(prop = round(n / sum(n), 3))
+c(faltantes = sum(is.na(wdbc)), duplicados = sum(duplicated(wdbc)))
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+uci <- "https://archive.ics.uci.edu/ml/machine-learning-databases"
+url <- paste0(uci, "/breast-cancer-wisconsin/wdbc.data")
+ruta_raw <- here("data", "raw", "wdbc.data")
+if (!file.exists(ruta_raw)) {             # descarga solo la 1.ª vez
+  dir.create(dirname(ruta_raw), recursive = TRUE,
+             showWarnings = FALSE)
+  download.file(url, ruta_raw, mode = "wb", quiet = TRUE)
+}
+medidas <- c("radius", "texture", "perimeter", "area",
+             "smoothness", "compactness", "concavity",
+             "concave_points", "symmetry", "fractal_dimension")
+nombres <- c("id", "diagnosis", paste0(medidas, "_mean"),
+             paste0(medidas, "_se"), paste0(medidas, "_worst"))
+
+wdbc <- read_csv(ruta_raw, col_names = nombres,
+                 show_col_types = FALSE) |>
+  mutate(diagnosis = factor(diagnosis, levels = c("B", "M"),
+                            labels = c("Benigno", "Maligno")))
+dim(wdbc)
+count(wdbc, diagnosis) |> mutate(prop = round(n / sum(n), 3))
+c(faltantes = sum(is.na(wdbc)), duplicados = sum(duplicated(wdbc)))
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## Verificación del paso A0
+
+Ejecuta este bloque antes de avanzar. Cada línea comprueba un resultado clave del paso.
+
+```{r}
+#| label: verificacion-a0
+verificar(nrow(wdbc) == 569, "569 casos cargados")
+verificar(sum(wdbc$diagnosis == "Maligno") == 212, "212 malignos")
+verificar(sum(is.na(wdbc)) == 0, "sin valores faltantes")
+```
+
+**Si todas las líneas muestran ✓**, continúa con el paso siguiente. **Si alguna muestra ✗**, vuelve a ejecutar los bloques del paso en orden, desde el primero; si persiste, usa el prompt «Si aparece un error» del bloque correspondiente o avisa en el chat indicando qué línea falló.
+
+# Paso A1 · EDA orientado a hipótesis (repaso)
+
+| | |
+|---|---|
+| **Para qué** | Pasar de mirar los datos a reunir evidencia a favor o en contra de cada hipótesis. |
+| **Prompt sugerido para la IA** | «¿Qué es la d de Cohen y cómo interpreto un valor de 2,5 frente a uno de 0,9?» |
+| **Tiempo sugerido** | 4 min |
+
+## A1.1 · Panorama: ¿cómo se distribuyen las variables?
+
+**Para qué:** Ver de un vistazo la forma de las 10 medidas medias en cada diagnóstico, antes de plantear pruebas.
+
+**Por qué así:** El panorama revela asimetrías, valores extremos y variables que separan los grupos. Orienta qué hipótesis vale la pena probar y qué transformaciones harán falta.
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A1.1 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+4. Escribe tu interpretación en ✍️.
+
+```{r}
+#| label: a1-1
+wdbc |>
+  select(diagnosis, ends_with("_mean")) |>
+  pivot_longer(-diagnosis, names_to = "variable",
+               values_to = "valor") |>         # formato largo
+  ggplot(aes(x = valor, fill = diagnosis)) +
+  geom_histogram(bins = 30, alpha = 0.6, position = "identity") +
+  facet_wrap(~ variable, scales = "free", ncol = 5) +
+  labs(x = NULL, y = "Frecuencia", fill = NULL) +
+  theme_minimal(base_size = 11)
+```
+
+**Qué deberías ver:** Histogramas con colas largas en área y perímetro, y curvas desplazadas entre diagnósticos en tamaño y concavidad.
+
+✍️ **Interpreta:** ¿Qué variables muestran asimetría? ¿Cuáles parecen separar los diagnósticos?
+
+*Escribe aquí...*
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A1.1"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «Panorama: ¿cómo se distribuyen las
+variables?».
+
+wdbc |>
+  select(diagnosis, ends_with("_mean")) |>
+  pivot_longer(-diagnosis, names_to = "variable",
+               values_to = "valor") |>         # formato largo
+  ggplot(aes(x = valor, fill = diagnosis)) +
+  geom_histogram(bins = 30, alpha = 0.6, position = "identity") +
+  facet_wrap(~ variable, scales = "free", ncol = 5) +
+  labs(x = NULL, y = "Frecuencia", fill = NULL) +
+  theme_minimal(base_size = 11)
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+wdbc |>
+  select(diagnosis, ends_with("_mean")) |>
+  pivot_longer(-diagnosis, names_to = "variable",
+               values_to = "valor") |>         # formato largo
+  ggplot(aes(x = valor, fill = diagnosis)) +
+  geom_histogram(bins = 30, alpha = 0.6, position = "identity") +
+  facet_wrap(~ variable, scales = "free", ncol = 5) +
+  labs(x = NULL, y = "Frecuencia", fill = NULL) +
+  theme_minimal(base_size = 11)
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+**3. Para interpretar el resultado** (copia el recuadro y reemplaza la última línea por la salida que obtuviste):
+
+```text
+Ejecuté el bloque «Panorama: ¿cómo se distribuyen las variables?» de
+un laboratorio de ciencia de datos en R. Mi pregunta es: ¿Qué
+variables muestran asimetría? ¿Cuáles parecen separar los
+diagnósticos? Ayúdame a interpretar la salida que pego al final. No
+uses datos que no estén en la salida.
+
+Salida:
+[pega aquí la salida del bloque]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## A1.2 · H1 · Tamaño del núcleo: gráfico y prueba
+
+**Para qué:** Contrastar H1 con un gráfico que podría refutarla y una prueba estadística.
+
+**Por qué así:** Escala log por la cola larga; mediana porque resiste extremos. Wilcoxon no supone normalidad: compara si un grupo tiende a tener valores mayores.
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A1.2 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+4. Escribe tu interpretación en ✍️.
+
+```{r}
+#| label: a1-2
+ggplot(wdbc, aes(x = diagnosis, y = area_mean,
+                 fill = diagnosis)) +
+  geom_violin(alpha = 0.4, colour = NA) +      # distribución
+  geom_boxplot(width = 0.15) +                 # mediana y cuartiles
+  scale_y_log10() +                            # escala logarítmica
+  labs(title = "H1. Área media del núcleo según diagnóstico",
+       x = NULL, y = "Área media (escala log)") +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
+
+wdbc |>
+  group_by(diagnosis) |>
+  summarise(mediana_area = median(area_mean),
+            RIC = IQR(area_mean))
+
+wilcox.test(area_mean ~ diagnosis, data = wdbc)  # ¿diferencia real?
+```
+
+**Qué deberías ver:** Medianas cercanas a 458 y 932 y un valor p muy pequeño (p < 0,001).
+
+✍️ **Interpreta:** ¿La evidencia apoya H1? ¿Por qué no basta con el valor p?
+
+*Escribe aquí...*
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A1.2"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «H1 · Tamaño del núcleo: gráfico y
+prueba».
+
+ggplot(wdbc, aes(x = diagnosis, y = area_mean,
+                 fill = diagnosis)) +
+  geom_violin(alpha = 0.4, colour = NA) +      # distribución
+  geom_boxplot(width = 0.15) +                 # mediana y cuartiles
+  scale_y_log10() +                            # escala logarítmica
+  labs(title = "H1. Área media del núcleo según diagnóstico",
+       x = NULL, y = "Área media (escala log)") +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
+
+wdbc |>
+  group_by(diagnosis) |>
+  summarise(mediana_area = median(area_mean),
+            RIC = IQR(area_mean))
+
+wilcox.test(area_mean ~ diagnosis, data = wdbc)  # ¿diferencia real?
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+ggplot(wdbc, aes(x = diagnosis, y = area_mean,
+                 fill = diagnosis)) +
+  geom_violin(alpha = 0.4, colour = NA) +      # distribución
+  geom_boxplot(width = 0.15) +                 # mediana y cuartiles
+  scale_y_log10() +                            # escala logarítmica
+  labs(title = "H1. Área media del núcleo según diagnóstico",
+       x = NULL, y = "Área media (escala log)") +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
+
+wdbc |>
+  group_by(diagnosis) |>
+  summarise(mediana_area = median(area_mean),
+            RIC = IQR(area_mean))
+
+wilcox.test(area_mean ~ diagnosis, data = wdbc)  # ¿diferencia real?
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+**3. Para interpretar el resultado** (copia el recuadro y reemplaza la última línea por la salida que obtuviste):
+
+```text
+Ejecuté el bloque «H1 · Tamaño del núcleo: gráfico y prueba» de un
+laboratorio de ciencia de datos en R. Mi pregunta es: ¿La evidencia
+apoya H1? ¿Por qué no basta con el valor p? Ayúdame a interpretar la
+salida que pego al final. No uses datos que no estén en la salida.
+
+Salida:
+[pega aquí la salida del bloque]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## A1.3 · H2 · Tamaño del efecto (d de Cohen)
+
+**Para qué:** Medir cuán grande es la diferencia en una escala común para las 30 variables.
+
+**Por qué así:** El valor p dice si hay diferencia; la d dice cuán grande es. Divide la diferencia de medias por la desviación combinada (0,2 pequeño; 0,5 mediano; 0,8 grande).
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A1.3 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+4. Escribe tu interpretación en ✍️.
+
+```{r}
+#| label: a1-3
+# d de Cohen: diferencia de medias / desviación combinada
+cohen_d <- function(x, g) {
+  a <- x[g == "Maligno"]; b <- x[g == "Benigno"]
+  na <- length(a); nb <- length(b)
+  sp <- sqrt(((na - 1) * var(a) + (nb - 1) * var(b)) /
+            (na + nb - 2))
+  (mean(a) - mean(b)) / sp
+}
+efectos <- wdbc |>
+  select(-id) |>
+  summarise(across(where(is.numeric), ~ cohen_d(.x, diagnosis))) |>
+  pivot_longer(everything(), names_to = "variable",
+               values_to = "d") |>
+  arrange(desc(abs(d)))
+
+ggplot(efectos, aes(reorder(variable, abs(d)), d)) +
+  geom_col() + geom_hline(yintercept = 0.8, linetype = 2) +
+  coord_flip() + labs(x = NULL, y = "d de Cohen")
+filter(efectos, variable %in% c("concave_points_mean",
+                                "texture_mean"))
+```
+
+**Qué deberías ver:** d cercana a 2,5 en concavidad y a 0,9 en textura.
+
+✍️ **Interpreta:** ¿La forma irregular distingue mejor que la textura?
+
+*Escribe aquí...*
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A1.3"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «H2 · Tamaño del efecto (d de
+Cohen)».
+
+# d de Cohen: diferencia de medias / desviación combinada
+cohen_d <- function(x, g) {
+  a <- x[g == "Maligno"]; b <- x[g == "Benigno"]
+  na <- length(a); nb <- length(b)
+  sp <- sqrt(((na - 1) * var(a) + (nb - 1) * var(b)) /
+            (na + nb - 2))
+  (mean(a) - mean(b)) / sp
+}
+efectos <- wdbc |>
+  select(-id) |>
+  summarise(across(where(is.numeric), ~ cohen_d(.x, diagnosis))) |>
+  pivot_longer(everything(), names_to = "variable",
+               values_to = "d") |>
+  arrange(desc(abs(d)))
+
+ggplot(efectos, aes(reorder(variable, abs(d)), d)) +
+  geom_col() + geom_hline(yintercept = 0.8, linetype = 2) +
+  coord_flip() + labs(x = NULL, y = "d de Cohen")
+filter(efectos, variable %in% c("concave_points_mean",
+                                "texture_mean"))
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+# d de Cohen: diferencia de medias / desviación combinada
+cohen_d <- function(x, g) {
+  a <- x[g == "Maligno"]; b <- x[g == "Benigno"]
+  na <- length(a); nb <- length(b)
+  sp <- sqrt(((na - 1) * var(a) + (nb - 1) * var(b)) /
+            (na + nb - 2))
+  (mean(a) - mean(b)) / sp
+}
+efectos <- wdbc |>
+  select(-id) |>
+  summarise(across(where(is.numeric), ~ cohen_d(.x, diagnosis))) |>
+  pivot_longer(everything(), names_to = "variable",
+               values_to = "d") |>
+  arrange(desc(abs(d)))
+
+ggplot(efectos, aes(reorder(variable, abs(d)), d)) +
+  geom_col() + geom_hline(yintercept = 0.8, linetype = 2) +
+  coord_flip() + labs(x = NULL, y = "d de Cohen")
+filter(efectos, variable %in% c("concave_points_mean",
+                                "texture_mean"))
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+**3. Para interpretar el resultado** (copia el recuadro y reemplaza la última línea por la salida que obtuviste):
+
+```text
+Ejecuté el bloque «H2 · Tamaño del efecto (d de Cohen)» de un
+laboratorio de ciencia de datos en R. Mi pregunta es: ¿La forma
+irregular distingue mejor que la textura? Ayúdame a interpretar la
+salida que pego al final. No uses datos que no estén en la salida.
+
+Salida:
+[pega aquí la salida del bloque]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## A1.4 · H3 · Redundancia entre variables
+
+**Para qué:** Detectar variables que dicen lo mismo.
+
+**Por qué así:** order = "hclust" agrupa las variables parecidas. La redundancia justifica el filtro de correlación y el PCA.
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A1.4 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+4. Escribe tu interpretación en ✍️.
+
+```{r}
+#| label: a1-4
+wdbc |>
+  select(ends_with("_mean")) |>        # las 10 medidas medias
+  cor() |>                             # matriz de correlaciones
+  corrplot(method = "color", type = "upper",
+           order = "hclust",           # agrupa las parecidas
+           addCoef.col = "black", number.cex = 0.6,
+           tl.col = "black", tl.cex = 0.8)
+```
+
+**Qué deberías ver:** Correlaciones cercanas a 1 entre radio, perímetro y área.
+
+✍️ **Interpreta:** ¿Qué variables son redundantes?
+
+*Escribe aquí...*
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A1.4"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «H3 · Redundancia entre variables».
+
+wdbc |>
+  select(ends_with("_mean")) |>        # las 10 medidas medias
+  cor() |>                             # matriz de correlaciones
+  corrplot(method = "color", type = "upper",
+           order = "hclust",           # agrupa las parecidas
+           addCoef.col = "black", number.cex = 0.6,
+           tl.col = "black", tl.cex = 0.8)
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+wdbc |>
+  select(ends_with("_mean")) |>        # las 10 medidas medias
+  cor() |>                             # matriz de correlaciones
+  corrplot(method = "color", type = "upper",
+           order = "hclust",           # agrupa las parecidas
+           addCoef.col = "black", number.cex = 0.6,
+           tl.col = "black", tl.cex = 0.8)
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+**3. Para interpretar el resultado** (copia el recuadro y reemplaza la última línea por la salida que obtuviste):
+
+```text
+Ejecuté el bloque «H3 · Redundancia entre variables» de un
+laboratorio de ciencia de datos en R. Mi pregunta es: ¿Qué variables
+son redundantes? Ayúdame a interpretar la salida que pego al final.
+No uses datos que no estén en la salida.
+
+Salida:
+[pega aquí la salida del bloque]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## A1.5 · Relación bivariada: tamaño y forma juntos
+
+**Para qué:** Ver si dos variables combinadas separan mejor que cada una por separado.
+
+**Por qué así:** Los modelos combinan variables; este gráfico anticipa por qué un árbol o un ensamble puede separar los diagnósticos con pocas preguntas.
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A1.5 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+4. Escribe tu interpretación en ✍️.
+5. Ejecuta la verificación del paso A1.
+
+```{r}
+#| label: a1-5
+ggplot(wdbc, aes(radius_mean, concave_points_mean,
+                 colour = diagnosis)) +
+  geom_point(alpha = 0.6, size = 2) +
+  labs(title = "Tamaño y forma, juntos",
+       x = "Radio medio", y = "Puntos cóncavos (media)",
+       colour = NULL) +
+  theme_minimal(base_size = 14)
+```
+
+**Qué deberías ver:** Malignos arriba a la derecha y benignos abajo a la izquierda, con una zona de solapamiento.
+
+✍️ **Interpreta:** ¿Qué casos quedan en la zona de solapamiento y qué implica eso para un modelo?
+
+*Escribe aquí...*
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A1.5"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «Relación bivariada: tamaño y forma
+juntos».
+
+ggplot(wdbc, aes(radius_mean, concave_points_mean,
+                 colour = diagnosis)) +
+  geom_point(alpha = 0.6, size = 2) +
+  labs(title = "Tamaño y forma, juntos",
+       x = "Radio medio", y = "Puntos cóncavos (media)",
+       colour = NULL) +
+  theme_minimal(base_size = 14)
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+ggplot(wdbc, aes(radius_mean, concave_points_mean,
+                 colour = diagnosis)) +
+  geom_point(alpha = 0.6, size = 2) +
+  labs(title = "Tamaño y forma, juntos",
+       x = "Radio medio", y = "Puntos cóncavos (media)",
+       colour = NULL) +
+  theme_minimal(base_size = 14)
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+**3. Para interpretar el resultado** (copia el recuadro y reemplaza la última línea por la salida que obtuviste):
+
+```text
+Ejecuté el bloque «Relación bivariada: tamaño y forma juntos» de un
+laboratorio de ciencia de datos en R. Mi pregunta es: ¿Qué casos
+quedan en la zona de solapamiento y qué implica eso para un modelo?
+Ayúdame a interpretar la salida que pego al final. No uses datos que
+no estén en la salida.
+
+Salida:
+[pega aquí la salida del bloque]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## Verificación del paso A1
+
+Ejecuta este bloque antes de avanzar. Cada línea comprueba un resultado clave del paso.
+
+```{r}
+#| label: verificacion-a1
+d_conc <- efectos$d[efectos$variable == "concave_points_mean"]
+d_text <- efectos$d[efectos$variable == "texture_mean"]
+verificar(d_conc > 2, "d de Cohen de la concavidad mayor que 2")
+verificar(d_conc > d_text, "la concavidad separa más que la textura")
+```
+
+**Si todas las líneas muestran ✓**, continúa con el paso siguiente. **Si alguna muestra ✗**, vuelve a ejecutar los bloques del paso en orden, desde el primero; si persiste, usa el prompt «Si aparece un error» del bloque correspondiente o avisa en el chat indicando qué línea falló.
+
+# Paso A2 · Ingeniería de características
+
+| | |
+|---|---|
+| **Para qué** | Dejar las variables listas para un modelo sin contaminar la evaluación. |
+| **Prompt sugerido para la IA** | «Explícame con un ejemplo numérico por qué escalar antes de dividir produce fuga de información.» |
+| **Tiempo sugerido** | 6 min |
+
+## A2.1 · Dividir en entrenamiento y prueba: ¿de dónde salen 426 y 143?
+
+**Para qué:** Separar 75 % para aprender y 25 % para evaluar, dentro de cada diagnóstico.
+
+**Por qué así:** 75 % de 357 benignos = 267,75 → 267; 75 % de 212 malignos = 159. Total: 426 para entrenar y 143 para probar, con la misma proporción de malignos.
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A2.1 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+
+```{r}
+#| label: a2-1
+# ¿Cómo se llega a 426 y 143? El 75 % de cada diagnóstico:
+count(wdbc, diagnosis) |>
+  mutate(entrenamiento = floor(n * 0.75),   # se redondea hacia abajo
+         prueba = n - entrenamiento)
+
+filas_train <- wdbc |>
+  mutate(fila = row_number()) |>
+  group_by(diagnosis) |>                    # estratificar
+  slice_sample(prop = 0.75) |>
+  pull(fila)
+train <- wdbc[filas_train, ]
+test  <- wdbc[-filas_train, ]
+c(entrenamiento = nrow(train), prueba = nrow(test))
+```
+
+**Qué deberías ver:** Una tabla con 267 y 159 para entrenamiento, 90 y 53 para prueba, y el resumen 426 y 143.
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A2.1"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «Dividir en entrenamiento y prueba:
+¿de dónde salen 426 y 143?».
+
+# ¿Cómo se llega a 426 y 143? El 75 % de cada diagnóstico:
+count(wdbc, diagnosis) |>
+  mutate(entrenamiento = floor(n * 0.75),   # se redondea hacia abajo
+         prueba = n - entrenamiento)
+
+filas_train <- wdbc |>
+  mutate(fila = row_number()) |>
+  group_by(diagnosis) |>                    # estratificar
+  slice_sample(prop = 0.75) |>
+  pull(fila)
+train <- wdbc[filas_train, ]
+test  <- wdbc[-filas_train, ]
+c(entrenamiento = nrow(train), prueba = nrow(test))
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+# ¿Cómo se llega a 426 y 143? El 75 % de cada diagnóstico:
+count(wdbc, diagnosis) |>
+  mutate(entrenamiento = floor(n * 0.75),   # se redondea hacia abajo
+         prueba = n - entrenamiento)
+
+filas_train <- wdbc |>
+  mutate(fila = row_number()) |>
+  group_by(diagnosis) |>                    # estratificar
+  slice_sample(prop = 0.75) |>
+  pull(fila)
+train <- wdbc[filas_train, ]
+test  <- wdbc[-filas_train, ]
+c(entrenamiento = nrow(train), prueba = nrow(test))
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## A2.2 · Escribir la receta
+
+**Para qué:** Definir las transformaciones como pasos: crear, transformar, escalar, codificar y quitar redundancia.
+
+**Por qué así:** Cada paso responde al EDA: asimetría (A1.1, H1) y redundancia (H3). Todavía no se transforma ningún dato.
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A2.2 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+
+```{r}
+#| label: a2-2
+receta <- recipe(diagnosis ~ ., data = train) |>
+  update_role(id, new_role = "id") |>         # no es predictor
+  step_mutate(
+    crecimiento_radio = radius_worst / radius_mean,
+    tamano_cat = cut(radius_mean, c(-Inf, 12, 15, Inf),
+      labels = c("pequeno", "mediano", "grande"))
+  ) |>
+  step_YeoJohnson(all_numeric_predictors()) |>  # asimetría
+  step_normalize(all_numeric_predictors()) |>   # media 0, sd 1
+  step_dummy(all_nominal_predictors()) |>       # columnas 0/1
+  step_corr(all_numeric_predictors(),
+            threshold = 0.9)                    # redundancia
+receta
+```
+
+**Qué deberías ver:** Un resumen de la receta con sus operaciones.
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A2.2"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «Escribir la receta».
+
+receta <- recipe(diagnosis ~ ., data = train) |>
+  update_role(id, new_role = "id") |>         # no es predictor
+  step_mutate(
+    crecimiento_radio = radius_worst / radius_mean,
+    tamano_cat = cut(radius_mean, c(-Inf, 12, 15, Inf),
+      labels = c("pequeno", "mediano", "grande"))
+  ) |>
+  step_YeoJohnson(all_numeric_predictors()) |>  # asimetría
+  step_normalize(all_numeric_predictors()) |>   # media 0, sd 1
+  step_dummy(all_nominal_predictors()) |>       # columnas 0/1
+  step_corr(all_numeric_predictors(),
+            threshold = 0.9)                    # redundancia
+receta
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+receta <- recipe(diagnosis ~ ., data = train) |>
+  update_role(id, new_role = "id") |>         # no es predictor
+  step_mutate(
+    crecimiento_radio = radius_worst / radius_mean,
+    tamano_cat = cut(radius_mean, c(-Inf, 12, 15, Inf),
+      labels = c("pequeno", "mediano", "grande"))
+  ) |>
+  step_YeoJohnson(all_numeric_predictors()) |>  # asimetría
+  step_normalize(all_numeric_predictors()) |>   # media 0, sd 1
+  step_dummy(all_nominal_predictors()) |>       # columnas 0/1
+  step_corr(all_numeric_predictors(),
+            threshold = 0.9)                    # redundancia
+receta
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## A2.3 · Aplicar la receta y revisar lo eliminado
+
+**Para qué:** Aprender de entrenamiento con prep() y aplicar a ambos conjuntos con bake().
+
+**Por qué así:** prep() nunca mira la prueba. La tabla de variables eliminadas va al registro de decisiones.
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A2.3 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+
+```{r}
+#| label: a2-3
+receta_ajustada <- prep(receta, training = train)   # aprende
+train_proc <- bake(receta_ajustada, new_data = NULL)
+test_proc  <- bake(receta_ajustada, new_data = test)  # aplica
+
+cat("Predictoras antes:", ncol(train) - 2,
+    "| después:", ncol(train_proc) - 2, "\n")
+
+tidy(receta_ajustada, number = 5)    # eliminadas por step_corr
+```
+
+**Qué deberías ver:** De 30 a 22 predictoras; unas diez variables eliminadas por correlación.
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A2.3"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «Aplicar la receta y revisar lo
+eliminado».
+
+receta_ajustada <- prep(receta, training = train)   # aprende
+train_proc <- bake(receta_ajustada, new_data = NULL)
+test_proc  <- bake(receta_ajustada, new_data = test)  # aplica
+
+cat("Predictoras antes:", ncol(train) - 2,
+    "| después:", ncol(train_proc) - 2, "\n")
+
+tidy(receta_ajustada, number = 5)    # eliminadas por step_corr
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+receta_ajustada <- prep(receta, training = train)   # aprende
+train_proc <- bake(receta_ajustada, new_data = NULL)
+test_proc  <- bake(receta_ajustada, new_data = test)  # aplica
+
+cat("Predictoras antes:", ncol(train) - 2,
+    "| después:", ncol(train_proc) - 2, "\n")
+
+tidy(receta_ajustada, number = 5)    # eliminadas por step_corr
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## A2.4 · Comprobar que no hubo fuga
+
+**Para qué:** Verificar que la prueba se transformó con lo aprendido del entrenamiento.
+
+**Por qué así:** Si la media en prueba fuera exactamente 0, la prueba se habría escalado con sus propios datos.
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A2.4 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+4. Escribe tu interpretación en ✍️.
+5. Ejecuta la verificación del paso A2.
+
+```{r}
+#| label: a2-4
+bind_rows(
+  train = summarise(train_proc, media = mean(texture_mean),
+                    desv = sd(texture_mean)),
+  test  = summarise(test_proc, media = mean(texture_mean),
+                    desv = sd(texture_mean)),
+  .id = "conjunto")
+```
+
+**Qué deberías ver:** Media 0 y desviación 1 en entrenamiento; valores cercanos pero distintos en prueba.
+
+✍️ **Interpreta:** ¿Por qué la media en prueba no es 0?
+
+*Escribe aquí...*
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A2.4"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «Comprobar que no hubo fuga».
+
+bind_rows(
+  train = summarise(train_proc, media = mean(texture_mean),
+                    desv = sd(texture_mean)),
+  test  = summarise(test_proc, media = mean(texture_mean),
+                    desv = sd(texture_mean)),
+  .id = "conjunto")
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+bind_rows(
+  train = summarise(train_proc, media = mean(texture_mean),
+                    desv = sd(texture_mean)),
+  test  = summarise(test_proc, media = mean(texture_mean),
+                    desv = sd(texture_mean)),
+  .id = "conjunto")
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+**3. Para interpretar el resultado** (copia el recuadro y reemplaza la última línea por la salida que obtuviste):
+
+```text
+Ejecuté el bloque «Comprobar que no hubo fuga» de un laboratorio de
+ciencia de datos en R. Mi pregunta es: ¿Por qué la media en prueba
+no es 0? Ayúdame a interpretar la salida que pego al final. No uses
+datos que no estén en la salida.
+
+Salida:
+[pega aquí la salida del bloque]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## Verificación del paso A2
+
+Ejecuta este bloque antes de avanzar. Cada línea comprueba un resultado clave del paso.
+
+```{r}
+#| label: verificacion-a2
+verificar(nrow(train) == 426 && nrow(test) == 143,
+          "426 casos de entrenamiento y 143 de prueba")
+verificar(abs(mean(train_proc$texture_mean)) < 1e-8,
+          "entrenamiento escalado (media 0)")
+verificar(abs(mean(test_proc$texture_mean)) > 1e-6,
+          "prueba escalada con la media de entrenamiento: sin fuga")
+```
+
+**Si todas las líneas muestran ✓**, continúa con el paso siguiente. **Si alguna muestra ✗**, vuelve a ejecutar los bloques del paso en orden, desde el primero; si persiste, usa el prompt «Si aparece un error» del bloque correspondiente o avisa en el chat indicando qué línea falló.
+
+# Paso A3 · Selección de variables
+
+| | |
+|---|---|
+| **Para qué** | Saber qué variables aportan información real. |
+| **Prompt sugerido para la IA** | «¿Cómo funcionan las variables sombra en Boruta y por qué una variable puede quedar como tentativa?» |
+| **Tiempo sugerido** | 2 min |
+
+## A3.1 · Ejecutar Boruta
+
+**Para qué:** Comparar cada variable con su copia al azar (sombra) en un Random Forest.
+
+**Por qué así:** Si una variable no supera de forma consistente a la mejor sombra, no aporta. Es un primer contacto con Random Forest, que veremos en la parte 2.
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A3.1 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+4. Escribe tu interpretación en ✍️.
+5. Ejecuta la verificación del paso A3.
+
+```{r}
+#| label: a3-1
+boruta_res <- Boruta(diagnosis ~ .,
+                     data = select(train_proc, -id),
+                     maxRuns = 100, doTrace = 0)
+print(boruta_res)
+
+attStats(boruta_res) |>                # importancia y decisión
+  rownames_to_column("variable") |>
+  arrange(desc(meanImp)) |>
+  select(variable, meanImp, decision) |>
+  head(12)
+```
+
+**Qué deberías ver:** Unas 21 variables confirmadas; arriba, crecimiento_radio, concave_points_mean y area_mean.
+
+✍️ **Interpreta:** ¿Coinciden las más importantes con las de mayor d de Cohen?
+
+*Escribe aquí...*
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A3.1"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «Ejecutar Boruta».
+
+boruta_res <- Boruta(diagnosis ~ .,
+                     data = select(train_proc, -id),
+                     maxRuns = 100, doTrace = 0)
+print(boruta_res)
+
+attStats(boruta_res) |>                # importancia y decisión
+  rownames_to_column("variable") |>
+  arrange(desc(meanImp)) |>
+  select(variable, meanImp, decision) |>
+  head(12)
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+boruta_res <- Boruta(diagnosis ~ .,
+                     data = select(train_proc, -id),
+                     maxRuns = 100, doTrace = 0)
+print(boruta_res)
+
+attStats(boruta_res) |>                # importancia y decisión
+  rownames_to_column("variable") |>
+  arrange(desc(meanImp)) |>
+  select(variable, meanImp, decision) |>
+  head(12)
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+**3. Para interpretar el resultado** (copia el recuadro y reemplaza la última línea por la salida que obtuviste):
+
+```text
+Ejecuté el bloque «Ejecutar Boruta» de un laboratorio de ciencia de
+datos en R. Mi pregunta es: ¿Coinciden las más importantes con las
+de mayor d de Cohen? Ayúdame a interpretar la salida que pego al
+final. No uses datos que no estén en la salida.
+
+Salida:
+[pega aquí la salida del bloque]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## Verificación del paso A3
+
+Ejecuta este bloque antes de avanzar. Cada línea comprueba un resultado clave del paso.
+
+```{r}
+#| label: verificacion-a3
+verificar(sum(boruta_res$finalDecision == "Confirmed") >= 18,
+          "Boruta confirma la mayoría de las variables")
+```
+
+**Si todas las líneas muestran ✓**, continúa con el paso siguiente. **Si alguna muestra ✗**, vuelve a ejecutar los bloques del paso en orden, desde el primero; si persiste, usa el prompt «Si aparece un error» del bloque correspondiente o avisa en el chat indicando qué línea falló.
+
+# Paso A4 · Reducción de dimensionalidad
+
+| | |
+|---|---|
+| **Para qué** | Resumir muchas variables correlacionadas y ver la estructura de los datos. |
+| **Prompt sugerido para la IA** | «Estas son las cargas del PC1: [pega la salida]. ¿Qué nombre le darías al componente y por qué?» |
+| **Tiempo sugerido** | 2 min |
+
+## A4.1 · PCA y scree plot
+
+**Para qué:** Resumir las 30 variables en pocos componentes interpretables.
+
+**Por qué así:** Se estandariza para que el área no domine por sus unidades. Es lo que respondiste en el ANTES.
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A4.1 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+4. Escribe tu interpretación en ✍️.
+
+```{r}
+#| label: a4-1
+X <- select(train, -id, -diagnosis)      # 30 variables originales
+
+pca_res <- PCA(X, scale.unit = TRUE,     # estandarizar
+               ncp = 30, graph = FALSE)
+
+fviz_eig(pca_res, addlabels = TRUE, ncp = 10)     # scree plot
+get_eigenvalue(pca_res) |> head(5)       # varianza acumulada
+```
+
+**Qué deberías ver:** PC1 cerca del 44 % y PC2 cerca del 18 %; con 4 componentes, cerca del 79 %.
+
+✍️ **Interpreta:** ¿Qué nombre le pondrías al PC1?
+
+*Escribe aquí...*
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A4.1"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «PCA y scree plot».
+
+X <- select(train, -id, -diagnosis)      # 30 variables originales
+
+pca_res <- PCA(X, scale.unit = TRUE,     # estandarizar
+               ncp = 30, graph = FALSE)
+
+fviz_eig(pca_res, addlabels = TRUE, ncp = 10)     # scree plot
+get_eigenvalue(pca_res) |> head(5)       # varianza acumulada
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+X <- select(train, -id, -diagnosis)      # 30 variables originales
+
+pca_res <- PCA(X, scale.unit = TRUE,     # estandarizar
+               ncp = 30, graph = FALSE)
+
+fviz_eig(pca_res, addlabels = TRUE, ncp = 10)     # scree plot
+get_eigenvalue(pca_res) |> head(5)       # varianza acumulada
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+**3. Para interpretar el resultado** (copia el recuadro y reemplaza la última línea por la salida que obtuviste):
+
+```text
+Ejecuté el bloque «PCA y scree plot» de un laboratorio de ciencia de
+datos en R. Mi pregunta es: ¿Qué nombre le pondrías al PC1? Ayúdame
+a interpretar la salida que pego al final. No uses datos que no
+estén en la salida.
+
+Salida:
+[pega aquí la salida del bloque]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## A4.2 · UMAP con tres valores de n_neighbors
+
+**Para qué:** Explorar la estructura no lineal y comprobar qué se mantiene al cambiar el parámetro.
+
+**Por qué así:** Un patrón que cambia con el parámetro no es un hallazgo. Tamaño, distancias y ejes no se interpretan.
+
+**Qué haces, paso a paso:**
+
+1. Ubica el bloque A4.2 (Outline o Ctrl + F).
+2. Ejecútalo con Run (Ctrl + Shift + Enter).
+3. Compara con «Deberías ver».
+4. Escribe tu interpretación en ✍️.
+5. Ejecuta la verificación del paso A4.
+
+```{r}
+#| label: a4-2
+X_esc <- scale(X)            # UMAP requiere estandarizar
+
+umap_res <- map_dfr(c(5, 15, 50), function(k) {
+  emb <- umap(X_esc, n_neighbors = k, min_dist = 0.1)
+  tibble(dim1 = emb[, 1], dim2 = emb[, 2],
+         diagnosis = train$diagnosis,
+         config = paste("n_neighbors =", k))
+}) |> mutate(config = fct_inorder(config))
+
+ggplot(umap_res, aes(dim1, dim2, colour = diagnosis)) +
+  geom_point(alpha = 0.6, size = 1.2) +
+  facet_wrap(~ config, scales = "free") +
+  theme_minimal(base_size = 13)
+```
+
+**Qué deberías ver:** Benignos y malignos separados en las tres configuraciones, con formas distintas.
+
+✍️ **Interpreta:** ¿Qué patrón se mantiene en las tres configuraciones?
+
+*Escribe aquí...*
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A4.2"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «UMAP con tres valores de
+n_neighbors».
+
+X_esc <- scale(X)            # UMAP requiere estandarizar
+
+umap_res <- map_dfr(c(5, 15, 50), function(k) {
+  emb <- umap(X_esc, n_neighbors = k, min_dist = 0.1)
+  tibble(dim1 = emb[, 1], dim2 = emb[, 2],
+         diagnosis = train$diagnosis,
+         config = paste("n_neighbors =", k))
+}) |> mutate(config = fct_inorder(config))
+
+ggplot(umap_res, aes(dim1, dim2, colour = diagnosis)) +
+  geom_point(alpha = 0.6, size = 1.2) +
+  facet_wrap(~ config, scales = "free") +
+  theme_minimal(base_size = 13)
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+X_esc <- scale(X)            # UMAP requiere estandarizar
+
+umap_res <- map_dfr(c(5, 15, 50), function(k) {
+  emb <- umap(X_esc, n_neighbors = k, min_dist = 0.1)
+  tibble(dim1 = emb[, 1], dim2 = emb[, 2],
+         diagnosis = train$diagnosis,
+         config = paste("n_neighbors =", k))
+}) |> mutate(config = fct_inorder(config))
+
+ggplot(umap_res, aes(dim1, dim2, colour = diagnosis)) +
+  geom_point(alpha = 0.6, size = 1.2) +
+  facet_wrap(~ config, scales = "free") +
+  theme_minimal(base_size = 13)
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+**3. Para interpretar el resultado** (copia el recuadro y reemplaza la última línea por la salida que obtuviste):
+
+```text
+Ejecuté el bloque «UMAP con tres valores de n_neighbors» de un
+laboratorio de ciencia de datos en R. Mi pregunta es: ¿Qué patrón se
+mantiene en las tres configuraciones? Ayúdame a interpretar la
+salida que pego al final. No uses datos que no estén en la salida.
+
+Salida:
+[pega aquí la salida del bloque]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## Verificación del paso A4
+
+Ejecuta este bloque antes de avanzar. Cada línea comprueba un resultado clave del paso.
+
+```{r}
+#| label: verificacion-a4
+var_pc1 <- get_eigenvalue(pca_res)[1, "variance.percent"]
+verificar(var_pc1 > 40 && var_pc1 < 50,
+          "el PC1 explica entre 40 % y 50 %")
+```
+
+**Si todas las líneas muestran ✓**, continúa con el paso siguiente. **Si alguna muestra ✗**, vuelve a ejecutar los bloques del paso en orden, desde el primero; si persiste, usa el prompt «Si aparece un error» del bloque correspondiente o avisa en el chat indicando qué línea falló.
+
+# Paso A5 · Guardar, renderizar y subir
+
+| | |
+|---|---|
+| **Para qué** | Dejar los datos procesados y el informe en tu repositorio de GitHub. |
+| **Prompt sugerido para la IA** | «Revisa mi registro de decisiones y dime si alguna justificación es débil o le falta una alternativa: [pega la tabla]» |
+| **Tiempo sugerido** | 1 min |
+
+## A5.1 · Guardar los datos procesados
+
+**Para qué:** Guardar en data/processed/ los datos limpios y los conjuntos procesados.
+
+**Por qué así:** En CSV se leen desde R o Python. wdbc_limpio.csv alimenta el EDA automático. Después: Render (Ctrl + Shift + K), commit y push con GitHub Desktop.
+
+**Qué haces, paso a paso:**
+
+1. Ejecuta el bloque A5.1 y la verificación del paso A5.
+2. Pulsa Render (Ctrl + Shift + K) y revisa el HTML.
+3. En GitHub Desktop: escribe el mensaje, Commit to main y Push origin.
+
+```{r}
+#| label: a5-1
+dir.create(here("data", "processed"), recursive = TRUE,
+           showWarnings = FALSE)
+write_csv(wdbc,                       # limpio, en su escala original
+          here("data", "processed", "wdbc_limpio.csv"))
+write_csv(train_proc,
+          here("data", "processed", "wdbc_train_proc.csv"))
+write_csv(test_proc,
+          here("data", "processed", "wdbc_test_proc.csv"))
+list.files(here("data", "processed"))
+```
+
+**Qué deberías ver:** Tres archivos .csv en la lista; tras el render, el informe HTML en analisis/.
+
+::: {.callout-tip collapse="true" title="Prompts listos para copiar · A5.1"}
+**1. Para entender el código** (copia todo el recuadro y pégalo en el chat de IA):
+
+```text
+Estoy en un laboratorio de ciencia de datos en R (RStudio con
+Quarto). Explícame línea por línea qué hace este código y por qué se
+usa en este paso del análisis: «Guardar los datos procesados».
+
+dir.create(here("data", "processed"), recursive = TRUE,
+           showWarnings = FALSE)
+write_csv(wdbc,                       # limpio, en su escala original
+          here("data", "processed", "wdbc_limpio.csv"))
+write_csv(train_proc,
+          here("data", "processed", "wdbc_train_proc.csv"))
+write_csv(test_proc,
+          here("data", "processed", "wdbc_test_proc.csv"))
+list.files(here("data", "processed"))
+```
+
+**2. Si aparece un error** (copia el recuadro y reemplaza la última línea por el mensaje de error):
+
+```text
+Al ejecutar este código en R (RStudio con Quarto) obtengo el error
+que pego al final. Explícame la causa y cómo corregirlo sin cambiar
+el propósito del análisis.
+
+dir.create(here("data", "processed"), recursive = TRUE,
+           showWarnings = FALSE)
+write_csv(wdbc,                       # limpio, en su escala original
+          here("data", "processed", "wdbc_limpio.csv"))
+write_csv(train_proc,
+          here("data", "processed", "wdbc_train_proc.csv"))
+write_csv(test_proc,
+          here("data", "processed", "wdbc_test_proc.csv"))
+list.files(here("data", "processed"))
+
+Error:
+[pega aquí el mensaje de error completo]
+```
+
+Recuerda: ejecuta, verifica contra la salida real y anota en la declaración de uso de IA lo que usaste.
+:::
+
+## Verificación del paso A5
+
+Ejecuta este bloque antes de avanzar. Cada línea comprueba un resultado clave del paso.
+
+```{r}
+#| label: verificacion-a5
+archivos <- c("wdbc_limpio.csv", "wdbc_train_proc.csv",
+              "wdbc_test_proc.csv")
+verificar(all(file.exists(here("data", "processed", archivos))),
+          "los tres archivos están en data/processed")
+```
+
+**Si todas las líneas muestran ✓**, continúa con el paso siguiente. **Si alguna muestra ✗**, vuelve a ejecutar los bloques del paso en orden, desde el primero; si persiste, usa el prompt «Si aparece un error» del bloque correspondiente o avisa en el chat indicando qué línea falló.
+
+# Cierre de la parte 1
+
+## Registro de decisiones
+
+Cada fila responde a cuatro preguntas: qué hiciste, por qué, qué alternativa descartaste y qué efecto tuvo. Usarás este formato en tu Producto de Unidad I.
+
+| Decisión | Justificación | Alternativa descartada | Efecto |
+|---|---|---|---|
+| División 75/25 estratificada antes de transformar | Evitar la fuga de información | Transformar todo y luego dividir | 426 casos en entrenamiento y 143 en prueba, con la misma proporción de malignos |
+| Transformación Yeo-Johnson | *completa* | | |
+| Filtro de correlación > 0,9 | *completa* | | |
+| Selección con Boruta | *completa* | | |
+
+## Responsabilidad sobre los datos
+
+✍️ Responde para tu propio dataset: ¿contiene datos personales o sensibles? ¿Cómo los anonimizaste? ¿Quién dio el consentimiento y para qué uso? ¿Qué parte de los datos no debe subirse a GitHub?
+
+*Escribe aquí...*
+
+## Declaración de uso de IA
+
+| Herramienta | Para qué la usé | Cómo verifiqué el resultado |
+|---|---|---|
+| | | |
+
+## Renderizar y subir a GitHub
+
+1. Guarda (`Ctrl + S`) y pulsa **Render** (`Ctrl + Shift + K`). Se genera `analisis/S3S4_parte1.html`.
+2. Abre **GitHub Desktop**. En *Changes* deben aparecer el `.qmd`, el `.html` y los `.csv` de `data/processed/`; los datos crudos de `data/raw/` no aparecen porque el `.gitignore` los excluye.
+3. Escribe el mensaje *S3S4: EDA e ingeniería de características* y pulsa **Commit to main**.
+4. Pulsa **Push origin** y verifica en github.com que los archivos estén en tu repositorio.
+
+> **Automatización del EDA:** `analisis/eda_automatico.qmd` genera un informe exploratorio completo de cualquier CSV, con alertas de faltantes, asimetría, redundancia y desbalance. Pruébalo con tu dataset (instrucciones dentro del archivo).
+
+> **Para ir más allá:** el archivo `extras/publicar-quarto.yml` de la plantilla automatiza el render y la publicación del informe en GitHub Pages cada vez que haces *push* (ver la guía *S3S4_Guia_Quarto_GitHub*).
