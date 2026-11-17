@@ -1,0 +1,97 @@
+---
+title: "Patrones de navegación y conversión: protocolo reproducible y EDA"
+subtitle: "UPeU · Ciencia de Datos e IA Aplicada · Producto de la Unidad I"
+author: "Estudiante de posgrado"
+format:
+  html:
+    toc: true
+    embed-resources: true
+    theme: cosmo
+lang: es
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+options(width=100)
+d <- read.csv("../data/raw/online_shoppers_intention.csv", check.names=FALSE)
+num <- c("Administrative","Administrative_Duration","Informational","Informational_Duration","ProductRelated","ProductRelated_Duration","BounceRates","ExitRates")
+revenue <- as.logical(d$Revenue)
+stopifnot(nrow(d)==12330, ncol(d)==18, all(!is.na(d)))
+```
+
+# 1. Contexto y pregunta
+
+**Proyecto:** Patrones de navegación asociados con la conversión de compras en comercio electrónico. **Pregunta:** ¿Qué patrones de navegación se asocian con sesiones que finalizan en compra? H1: mayor actividad en productos se relaciona con compra; H2: tasas de rebote y salida menores se relacionan con compra; H3: existen correlaciones que justifican evaluar PCA. Asociación no equivale a causalidad.
+
+# 2. Fuente, trazabilidad y ética
+
+Datos secundarios de UCI Machine Learning Repository, dataset 468 (DOI: <https://doi.org/10.24432/C5F88Q>). Registros de sesiones, no de personas identificadas. No se asume consentimiento individual obtenido por el investigador ni generalización a Perú. El CSV original permanece en `data/raw`.
+
+# 3. Auditoría de calidad
+
+```{r}
+cat("Sesiones:", nrow(d), "| Variables:",ncol(d), "| Nulos:",sum(is.na(d)), "| Filas idénticas:",sum(duplicated(d)),"\n")
+print(table(Compra=revenue))
+barplot(table(revenue), names.arg=c("Sin compra","Con compra"), col=c("#17366d","#eb8c23"),main="Distribución de compra",ylab="Sesiones")
+```
+
+Se conservan las filas idénticas: carecemos de identificador de sesión para concluir que son errores. No se necesita imputación. Los códigos de sistema operativo, navegador, región y tráfico representan categorías.
+
+# 4. Ingeniería de variables y PCA
+
+La preparación íntegra y sus decisiones están documentadas en `scripts/01_preparacion.R` y `docs/diccionario_datos.xlsx`. Se generan indicadores de páginas, duración, intensidad y `log1p` de tiempos, preservando las variables originales. `PageValues` se reserva con advertencia de posible fuga temporal de información.
+
+```{r}
+C <- cor(d[num]); print(round(C,3))
+heatmap(C, symm=TRUE, main="Correlación: navegación", margins=c(10,10))
+p <- prcomp(d[num], center=TRUE, scale.=TRUE)
+eig <- p$sdev^2; pr <- eig/sum(eig)
+pca_tab <- data.frame(PC=paste0('PC',seq_along(pr)),Autovalor=round(eig,3),Varianza_pct=round(100*pr,1),Acumulada_pct=round(100*cumsum(pr),1))
+print(pca_tab,row.names=FALSE)
+plot(seq_along(pr),100*pr, type='b',pch=19,xlab='Componente',ylab='Varianza explicada (%)',main='Scree plot')
+print(round(p$rotation[,1:2],3))
+```
+
+Los dos primeros componentes explican `r round(100*sum(pr[1:2]),1)` % de la varianza, por lo que dos dimensiones NO preservan la totalidad de información. Las cargas reportadas son coeficientes de los eigenvectores (no correlaciones). El PCA es exploratorio: ningún parámetro aprendido del conjunto completo puede reutilizarse en la validación cruzada de Unidad II.
+
+```{r}
+set.seed(2026)
+i0 <- sample(which(!revenue),min(1200,sum(!revenue)))
+i1 <- sample(which(revenue),min(700,sum(revenue)))
+idx <- c(i0,i1)
+plot(p$x[idx,1],p$x[idx,2],col=ifelse(revenue[idx],"#ed8a22","#2a4779"),pch=16,cex=.35,xlab="PC1",ylab="PC2",main="PCA: submuestra de sesiones")
+legend('topright',legend=c('Sin compra','Con compra'),col=c('#2a4779','#ed8a22'),pch=16,bty='n')
+```
+
+# 5. EDA orientado a hipótesis
+
+```{r}
+vars <- c('ProductRelated','ProductRelated_Duration','BounceRates','ExitRates')
+resultados <- do.call(rbind,lapply(vars,function(z){
+  a <- d[[z]][revenue]; b <- d[[z]][!revenue]; w <- wilcox.test(a,b,exact=FALSE)
+  ranks <- rank(c(a,b)); U <- sum(ranks[seq_along(a)]) - length(a)*(length(a)+1)/2
+  c(variable=z, media_compra=round(mean(a),3), media_no=round(mean(b),3), delta_cliff=round(2*U/(length(a)*length(b))-1,3),p_bilateral=signif(w$p.value,3))
+}))
+print(resultados,quote=FALSE)
+par(mfrow=c(2,2))
+for(v in vars){x<-d[[v]];if(grepl('Duration|ProductRelated',v))x<-log1p(x);boxplot(x~revenue,names=c('Sin compra','Con compra'),main=v,ylab=if(grepl('Duration|ProductRelated',v)) 'log(1+x)' else 'proporción',col='#dce5f2',outline=FALSE)}
+par(mfrow=c(1,1))
+```
+
+**H1:** Las métricas de productos son superiores entre sesiones con compra; apoyo exploratorio. **H2:** Las tasas de rebote y salida son inferiores; apoyo exploratorio. **H3:** Las correlaciones y componentes muestran redundancia parcial; apoyo exploratorio, no necesariamente reducción a dos ejes. Los contrastes son bilaterales y no confirmatorios (sin ajuste por multiplicidad). Diferencias y significación no establecen causalidad.
+
+# 6. Hallazgos y decisiones para Unidad II
+
+Respuesta: `Revenue`; predictoras originales y derivadas temporalmente disponibles. Tratar categorías como factores; analizar desbalance (`r round(100*mean(revenue),1)` % clase compra), atípicos, multicolinealidad y disponibilidad previa de `PageValues`. Separar datos antes de ajustar transformaciones; estandarización/PCA, imputación y selección deben estimarse dentro de cada fold. Comparar rendimiento con y sin PCA y reportar PR-AUC, ROC-AUC y sensibilidad. No se entrenan modelos definitivos en Unidad I.
+
+# Referencia y declaración IA
+
+Sakar, C. O., Polat, S. O., Katircioglu, M., & Kastro, Y. (2019). Real-time prediction of online shoppers’ purchasing intention using multilayer perceptron and LSTM recurrent neural networks. *Neural Computing and Applications, 31*, 6893–6908. <https://doi.org/10.1007/s00521-018-3523-0>.
+
+UCI Machine Learning Repository (s. f.). *Online Shoppers Purchasing Intention Dataset*. <https://doi.org/10.24432/C5F88Q>.
+
+**IA generativa:** ChatGPT (OpenAI) apoyó la redacción y la construcción del código. Deben verificarse la ejecución Quarto y la reproducción local en RStudio antes de presentar la entrega final.
