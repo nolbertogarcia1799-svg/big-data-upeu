@@ -1,0 +1,29 @@
+name: Publicar entregables taller S3S4
+on:
+  push:
+    paths:
+      - 'taller-s3s4/RESPUESTAS_TALLER_S3S4.md'
+      - '.github/workflows/taller-s3s4.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  documentos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar Pandoc
+        run: sudo apt-get update -qq && sudo apt-get install -y pandoc
+      - name: Crear Word y HTML desde respuestas verificadas
+        run: |
+          pandoc taller-s3s4/RESPUESTAS_TALLER_S3S4.md -f gfm -t docx -o taller-s3s4/TALLER_S3S4_RESUELTO.docx --standalone
+          pandoc taller-s3s4/RESPUESTAS_TALLER_S3S4.md -f gfm -t html5 -o taller-s3s4/INFORME_TALLER_S3S4.html --standalone --metadata title="Taller S3S4 UPeU"
+          test -s taller-s3s4/TALLER_S3S4_RESUELTO.docx
+          test -s taller-s3s4/INFORME_TALLER_S3S4.html
+      - name: Publicar archivos
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add taller-s3s4/TALLER_S3S4_RESUELTO.docx taller-s3s4/INFORME_TALLER_S3S4.html
+          git diff --cached --quiet || git commit -m "Taller S3S4: Word e HTML generados y comprobados"
+          git push
