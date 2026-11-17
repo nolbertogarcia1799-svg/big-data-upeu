@@ -1,7 +1,12 @@
 ---
 title: "Patrones de navegación y conversión: protocolo reproducible y EDA"
 subtitle: "UPeU · Ciencia de Datos e IA Aplicada · Producto de la Unidad I"
-author: "Estudiante de posgrado"
+author:
+  - name: "Nolberto García Valdez"
+  - name: "Lina Argote Lazon"
+  - name: "Estrella Azucena Esquiagola Aranda"
+  - name: "Mercedes Maria Nagamine Miyashiro"
+  - name: "Jazmin Milagros Damian Ledesma"
 format:
   html:
     toc: true
