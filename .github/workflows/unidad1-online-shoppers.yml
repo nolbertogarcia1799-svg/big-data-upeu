@@ -28,8 +28,12 @@ jobs:
         with:
           r-version: 'release'
           use-public-rspm: true
+      - name: Instalar biblioteca de sistema libuv
+        run: sudo apt-get update -qq && sudo apt-get install -y libuv1-dev
       - name: Instalar knitr y rmarkdown
-        run: Rscript -e 'install.packages(c("knitr", "rmarkdown"), repos="https://cloud.r-project.org")'
+        run: |
+          Rscript -e 'install.packages(c("knitr", "rmarkdown"), repos="https://cloud.r-project.org")'
+          Rscript -e 'stopifnot(requireNamespace("knitr", quietly=TRUE), requireNamespace("rmarkdown", quietly=TRUE))'
       - name: Instalar Quarto
         uses: quarto-dev/quarto-actions/setup@v2
       - name: Obtener dataset original desde UCI
