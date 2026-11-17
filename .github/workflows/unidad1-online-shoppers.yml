@@ -1,0 +1,95 @@
+name: Unidad I Online Shoppers - ejecutar Quarto y publicar
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: unidad1-online-shoppers
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar Python para diccionario
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Instalar dependencias de Python
+        run: python -m pip install --disable-pip-version-check openpyxl
+      - name: Instalar R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+      - name: Instalar Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+      - name: Obtener dataset original desde UCI
+        run: |
+          mkdir -p data/raw
+          python - <<'PY'
+          from urllib.request import urlopen,Request
+          from zipfile import ZipFile
+          from io import BytesIO
+          from pathlib import Path
+          import hashlib
+          url="https://archive.ics.uci.edu/static/public/468/online+shoppers+purchasing+intention+dataset.zip"
+          binary=urlopen(Request(url,headers={"User-Agent":"Mozilla/5.0"}),timeout=90).read()
+          with ZipFile(BytesIO(binary)) as z:
+              matches=[n for n in z.namelist() if n.lower().endswith("online_shoppers_intention.csv")]
+              if len(matches)!=1: raise RuntimeError("CSV original no encontrado en archivo de UCI")
+              data=z.read(matches[0])
+          target=Path("data/raw/online_shoppers_intention.csv")
+          target.write_bytes(data)
+          print("SHA256:",hashlib.sha256(data).hexdigest())
+          PY
+      - name: Verificar integridad del CSV y preparar dataset
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          path=Path("data/raw/online_shoppers_intention.csv")
+          digest=hashlib.sha256(path.read_bytes()).hexdigest()
+          expected="b3055ee355f59134d851d32641183cb4a8b45def7124d2f50442a042f358e0d9"
+          if digest!=expected: raise RuntimeError("SHA-256 diferente del archivo auditado en clase. No publicar datos hasta revisar.")
+          PY
+          Rscript scripts/01_preparacion.R
+          python scripts/02_generar_diccionario.py
+      - name: Renderizar el informe Quarto
+        run: quarto render reports/reporte_unidad_1.qmd --to html
+      - name: Validar artefactos generados
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import csv
+          raw=Path("data/raw/online_shoppers_intention.csv")
+          cur=Path("data/processed/online_shoppers_curado.csv")
+          doc=Path("docs/diccionario_datos.xlsx")
+          html=Path("reports/reporte_unidad_1.html")
+          for p in (raw,cur,doc,html):
+              assert p.exists() and p.stat().st_size>200, str(p)
+          with cur.open(newline="",encoding="utf-8") as f:
+              reader=csv.reader(f)
+              header=next(reader)
+              n=sum(1 for _ in reader)
+          assert n==12330 and len(header)==25,(n,len(header))
+          print("Validacion aprobada:",n,"filas, ",len(header),"columnas")
+          PY
+      - name: Publicar los archivos generados en el repositorio
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/raw/online_shoppers_intention.csv data/processed/online_shoppers_curado.csv docs/diccionario_datos.xlsx reports/reporte_unidad_1.html
+          git diff --cached --quiet || git commit -m "Unidad I: datos curados, diccionario y reporte Quarto verificados"
+          git push
+      - name: Etiquetar la versión comprobada
+        run: |
+          git fetch --tags
+          if git rev-parse -q --verify refs/tags/v1.0-unidad1 >/dev/null; then
+            echo "La etiqueta v1.0-unidad1 ya existe; se respeta sin modificar."
+          else
+            git tag -a v1.0-unidad1 -m "Unidad I: producto validado y renderizado con Quarto"
+            git push origin refs/tags/v1.0-unidad1
+          fi
