@@ -28,6 +28,8 @@ jobs:
         with:
           r-version: 'release'
           use-public-rspm: true
+      - name: Instalar knitr y rmarkdown
+        run: Rscript -e 'install.packages(c("knitr", "rmarkdown"), repos="https://cloud.r-project.org")'
       - name: Instalar Quarto
         uses: quarto-dev/quarto-actions/setup@v2
       - name: Obtener dataset original desde UCI
