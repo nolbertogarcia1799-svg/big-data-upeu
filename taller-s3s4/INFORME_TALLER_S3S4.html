@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Taller S3S4 UPeU</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Taller S3S4 UPeU</h1>
+</header>
+<h1 id="taller-de-automatización-del-análisis--sesiones-3-y-4">Taller de
+automatización del análisis — Sesiones 3 y 4</h1>
+<p><strong>Asignatura:</strong> Ciencia de Datos e IA Aplicada —
+UPeU<br />
+<strong>Modalidad:</strong> Desarrollo individual; se ejecutaron y
+verificaron las tareas de los tres roles.<br />
+<strong>Datos:</strong> Breast Cancer Wisconsin (Diagnostic),
+<code>wdbc_limpio.csv</code> del proyecto de clase.</p>
+<p><strong>Alcance metodológico:</strong> El ZIP proporcionado contiene
+el archivo R <code>eda_automatico.qmd</code> y el CSV oficial, pero no
+el cuaderno Python B6 ni las salidas de B2/B3. Por tanto, la comparación
+predictiva siguiente es una <strong>implementación alternativa
+reproducible</strong>, no una ejecución de la función original
+<code>analisis_automatico</code>. Las actividades 2 y 4 reutilizan los
+datos de clase, alternativa admitida por la guía en ausencia de un
+segundo CSV.</p>
+<h2 id="actividad-1-eda-automático--datos-de-clase">Actividad 1. EDA
+automático — datos de clase</h2>
+<h3 id="11-estructura-y-calidad">1.1. Estructura y calidad</h3>
+<p>Se analizaron <strong>569 casos, 32 columnas en el archivo</strong>
+(<code>id</code>, <code>diagnosis</code> y <strong>30 predictoras
+numéricas</strong>). Una vez excluido <code>id</code>, el análisis
+incluye 31 columnas, contando la respuesta. No existen valores faltantes
+ni filas duplicadas.</p>
+<h3 id="12-distribución-y-desbalance">1.2. Distribución y
+desbalance</h3>
+<p>Se registran <strong>357 benignos (62,74 %) y 212 malignos (37,26
+%)</strong>. El informe activa alerta cuando la clase minoritaria es
+menor que el <strong>30 %</strong>, umbral no alcanzado: no corresponde
+emitir alerta de desbalance. La estratificación y la sensibilidad para
+malignos siguen siendo relevantes.</p>
+<h3 id="13-variables-con-mayor-diferenciación">1.3. Variables con mayor
+diferenciación</h3>
+<p>Por d de Cohen, con el grupo maligno menos el benigno, destacan
+<code>concave_points_worst</code> (<strong>2,693</strong>),
+<code>perimeter_worst</code> (<strong>2,598</strong>) y
+<code>concave_points_mean</code> (<strong>2,545</strong>). El material
+de parte 1 menciona <code>concave_points_mean</code> entre las variables
+destacadas esperadas por Boruta, pero no conserva su salida real; la
+coincidencia con Boruta <strong>no se pudo verificar de forma
+completa</strong>.</p>
+<h3 id="14-dos-alertas-y-resolución">1.4. Dos alertas y resolución</h3>
+<ul>
+<li><strong>Asimetría:</strong> <code>area_se</code> alcanza asimetría
+próxima a <strong>5,43</strong>, superior al criterio absoluto de 1. Se
+considera log1p para valores no negativos o Yeo–Johnson, ajustando la
+transformación solo en el entrenamiento; no se eliminan casos extremos
+sin justificación.</li>
+<li><strong>Redundancia:</strong> <code>radius_mean</code> y
+<code>perimeter_mean</code> alcanzan correlación aproximadamente
+<strong>0,998</strong>, superior a 0,90. Un filtro de correlaciones o
+PCA dentro de validación cruzada ayuda a evitar redundancia sin
+contaminar la estimación.</li>
+</ul>
+<h2 id="actividad-2-eda-con-dataset-seleccionado">Actividad 2. EDA con
+dataset seleccionado</h2>
+<h3 id="21-descripción">2.1. Descripción</h3>
+<p>Se reutilizó <code>wdbc_limpio.csv</code>: <strong>569 casos; 30
+predictoras numéricas, respuesta categórica binaria
+<code>diagnosis</code> con valores Benigno y Maligno</strong>. Se
+excluye <code>id</code> del modelado.</p>
+<h3 id="22-alertas-prioritarias">2.2. Alertas prioritarias</h3>
+<p>Hay numerosas alertas de asimetría y <strong>21 pares con correlación
+absoluta superior a 0,90</strong>. La redundancia se prioriza por su
+efecto sobre estabilidad e interpretación. Se plantea selección
+integrada al entrenamiento y comparación con regularización, evitando
+decidir el filtrado con el conjunto completo.</p>
+<h3 id="23-propuesta-crítica">2.3. Propuesta crítica</h3>
+<p><strong>Propuesta evaluada:</strong> descartar todas las variables
+con |r| superior a 0,90 y transformar automáticamente todas las
+variables asimétricas. <strong>Decisión: MODIFICAR.</strong> Las
+correlaciones y asimetrías justifican examinar tratamientos, no la
+supresión indiscriminada de indicadores potencialmente relevantes. Cada
+tratamiento deberá formar parte de los pliegues de validación. Esta
+observación se contrastó con el contenido y los umbrales de
+<code>eda_automatico.qmd</code> y con el CSV.</p>
+<h2
+id="actividad-3-comparación-automática-de-modelos--datos-de-clase">Actividad
+3. Comparación automática de modelos — datos de clase</h2>
+<p><strong>Evaluación alternativa reproducible:</strong> partición
+estratificada entrenamiento/prueba <strong>426/143</strong>, semilla
+<strong>42</strong>, cinco pliegues estratificados sobre entrenamiento.
+La clase positiva es Maligno y la métrica principal es <strong>AUC
+ROC</strong>. Elastic Net usa estandarización dentro del pipeline.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Modelo</th>
+<th style="text-align: right;">AUC CV</th>
+<th style="text-align: right;">AUC prueba</th>
+<th style="text-align: right;">Sensibilidad (maligno)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">LightGBM</td>
+<td style="text-align: right;">0,9921</td>
+<td style="text-align: right;">0,9958</td>
+<td style="text-align: right;">0,8868</td>
+</tr>
+<tr>
+<td style="text-align: left;">Elastic Net</td>
+<td style="text-align: right;">0,9910</td>
+<td style="text-align: right;">0,9975</td>
+<td style="text-align: right;">0,9245</td>
+</tr>
+<tr>
+<td style="text-align: left;">XGBoost</td>
+<td style="text-align: right;">0,9909</td>
+<td style="text-align: right;">0,9952</td>
+<td style="text-align: right;">0,9057</td>
+</tr>
+<tr>
+<td style="text-align: left;">Random Forest</td>
+<td style="text-align: right;">0,9872</td>
+<td style="text-align: right;">0,9960</td>
+<td style="text-align: right;">0,9057</td>
+</tr>
+</tbody>
+</table>
+<h3 id="31-recomendación-y-criterio">3.1. Recomendación y criterio</h3>
+<p>LightGBM logra el AUC CV más alto (<strong>0,9921</strong>). Si se
+aplica el criterio de parsimonia de elegir Elastic Net cuando su AUC
+queda a menos de 0,005 del mejor, se selecciona <strong>Elastic
+Net</strong> (AUC CV <strong>0,9910</strong>). Esta decisión es del
+procedimiento alternativo, no una salida verificada de B6.</p>
+<h3 id="32-comparación-con-b2b3">3.2. Comparación con B2/B3</h3>
+<p>No existe un registro comprobable de las métricas previas B2/B3 en el
+ZIP. Con el mismo algoritmo, preprocesamiento, semilla y partición deben
+obtenerse resultados iguales o muy próximos; <strong>no se afirma haber
+comprobado esa coincidencia</strong>.</p>
+<h3 id="33-elección-médica-para-δauc-inferior-a-0005">3.3. Elección
+médica para ΔAUC inferior a 0,005</h3>
+<p>Se preferiría el modelo interpretable y parsimonioso, sin sacrificar
+la sensibilidad a malignos, y con evaluación clínica de errores y
+calibración. En esta partición, Elastic Net presenta sensibilidad
+<strong>0,9245</strong>, frente a <strong>0,8868</strong> de LightGBM.
+Es una comparación exploratoria, no validación clínica.</p>
+<h2 id="actividad-4-comparación-con-el-dataset-elegido">Actividad 4.
+Comparación con el dataset elegido</h2>
+<h3 id="41-tipo-métrica-y-recomendación">4.1. Tipo, métrica y
+recomendación</h3>
+<p>Es <strong>clasificación binaria</strong>. Se utilizó AUC ROC; el
+modelo elegido por la regla de parsimonia alternativa fue
+<strong>Elastic Net</strong>. Como se empleó exactamente el mismo CSV de
+clase y configuración, los archivos
+<code>comparacion_caso_clase.csv</code> y
+<code>comparacion_mi_dataset.csv</code> son iguales. No son dos muestras
+independientes.</p>
+<h3 id="42-validación-cruzada-frente-a-prueba">4.2. Validación cruzada
+frente a prueba</h3>
+<p>Las diferencias absolutas entre AUC de prueba y media CV fueron entre
+<strong>0,0037 y 0,0088</strong>, todas favorables a prueba. No se
+aprecia degradación evidente en esta partición, pero una sola división
+no descarta sobreajuste; hacen falta sensibilidad, calibración e
+intervalos de confianza.</p>
+<h3 id="43-decisión-automática">4.3. Decisión automática</h3>
+<p>La división <strong>75/25 estratificada</strong> conserva
+aproximadamente las proporciones de Benigno y Maligno y es adecuada para
+clasificación; los escaladores de Elastic Net fueron aprendidos
+únicamente dentro de cada fold. Se excluyó <code>id</code> para evitar
+utilizar un identificador ajeno al fenómeno clínico.</p>
+<h2 id="conclusión">Conclusión</h2>
+<p>El CSV tiene completitud alta, sin duplicados, pero presenta
+multicolinealidad considerable. Los cuatro modelos lograron buena
+discriminación, con diferencias pequeñas de AUC. La sensibilidad clínica
+y la parsimonia importan junto al rendimiento agregado. Las evaluaciones
+B6 y Boruta <strong>requieren aún el cuaderno y los resultados
+originales</strong> para ser declaradas reproducciones exactas.</p>
+<p><strong>Material fuente:</strong>
+<code>s3s4-laboratorio-main.zip</code> y <code>TALLER CLASES.pdf</code>
+proporcionados en el curso.</p>
+</body>
+</html>
