@@ -1,5 +1,9 @@
 name: Unidad I Online Shoppers - ejecutar Quarto y publicar
 on:
+  push:
+    paths:
+      - '.github/workflows/unidad1-online-shoppers.yml'
+      - 'unidad1-online-shoppers/**'
   workflow_dispatch:
 
 permissions:
