@@ -1,6 +1,7 @@
 # Taller de automatización del análisis — Sesiones 3 y 4
 
 **Asignatura:** Ciencia de Datos e IA Aplicada — UPeU  
+**Autor:** Nolberto García Valdez  
 **Modalidad:** Desarrollo individual; se ejecutaron y verificaron las tareas de los tres roles.  
 **Datos:** Breast Cancer Wisconsin (Diagnostic), `wdbc_limpio.csv` del proyecto de clase.
 
